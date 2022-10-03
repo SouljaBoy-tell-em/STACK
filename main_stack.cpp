@@ -5,10 +5,12 @@
 
 #define CANARY 0xDEDDED32
 #define RATIO_SIZE_STACK 2
-#define POISON -228.0
-#define CHECK_ERROR(condition, message_error) \
+#define DETERMINERROR 000000001
+#define POISON -228.228
+#define STATUS(codeError) (codeError) ? "error": "ok"
+#define CHECK_ERROR(condition, message_error) 				 \
             do {                                          \
-               if (condition) {                           \
+               if  (condition) {                          \
                    printf ("%s", message_error);          \
                    return 1;                              \
                }                                          \
@@ -43,12 +45,15 @@ enum errors {
 
 
 void dumpFileCleaning (void);
-bool StackCtor (Stack * stack, int capacity);
+void StackCtor (Stack * stack, int capacity);
 void StackPush (Stack * stack, Elem_t addDataElement);
+unsigned int fullCodeError (Stack * stack);
 void StackError (Stack * stack);
-void StackDumpErrors (Stack * stack);
+void StackDump (Stack * stack, int lineStackDump, const char * nameFunctionDump, const char * fileFunctionDump);
+void errorsDecoder (Stack * stack, FILE * dump);
+void stackInfoDump (Stack * stack, FILE * dump);
 void StackReSize (Stack * stack);
-
+void UninititalizeElements (Stack * stack);
 
 
 int main (void) {
@@ -56,19 +61,11 @@ int main (void) {
 	Stack stack = {};
 
 	dumpFileCleaning ();
-	CHECK_ERROR (!StackCtor (&stack, 8), "Stack has null-pointer in main ().");
+	StackCtor (&stack, 25);
 
-/*
-	for (int i = 0; i < 10; i++)
-		StackPush (&stack, (double) i);
+	for (int i = 0; i < 20; i++)
+		StackPush (&stack, (double) (i + 1));
 
-	for (int i = 0; i < 10; i++)
-		printf ("Elem: %lf; size: %d; adress: %p; capacity: %d;\n", stack.data[i], stack.size, &stack.data[i], stack.capacity);
-
-	printf ("CANARY_START: %x; adress: %p\n", stack.startStructCanary, &stack.startStructCanary);
-	printf ("CANARY_FINISH: %x; adress: %p\n", stack.finishStructCanary, stack.finishStructCanary);
-
-	*/
 
 	return 0;
 }
@@ -81,94 +78,159 @@ void dumpFileCleaning (void) {
 }
 
 
-bool StackCtor (Stack * stack, int capacity) {
-
-	if (stack == NULL)
-		return false;
+void StackCtor (Stack * stack, int capacity) {
 
 	stack->code_of_error = NO_ERROR;
+	if (stack == NULL)
+		stack->code_of_error = STACK_NULL;
 
-	if ((stack->data = (Elem_t * ) calloc (capacity + 2, sizeof (Elem_t))) == NULL)
+	if ((stack->data = (Elem_t * ) malloc (capacity * sizeof (Elem_t) + 2 * sizeof (long long))) == NULL)
 		stack->code_of_error = BAD_DATA;
 
 	stack->capacity = capacity;
 	if (stack->capacity < 0)
 		stack->code_of_error = BAD_CAPACITY;
 
-	stack->size                                            =      0;
-	stack->startStructCanary                               = CANARY;
-	stack->finishStructCanary                              = CANARY;
-	* ((long long * ) stack->data)                         = CANARY;
-	* ((long long * )(stack->data + stack->capacity) + 1)  = CANARY;
-
-	return true;
+	stack->size                                                                                            =      0;
+	stack->startStructCanary                                                                               = CANARY;
+	stack->finishStructCanary                                                                              = CANARY;
+	* ((long long * ) stack->data)                                                                         = CANARY;
+	* ((long long * )((uint8_t * )stack->data + sizeof (long long) + sizeof (Elem_t) * stack->capacity))   = CANARY;
+	UninititalizeElements (stack);
 }
 
 
 void StackPush (Stack * stack, Elem_t addDataElement) {
 
-
+	StackError (stack);
 	if (stack->size > stack->capacity)
-		 StackReSize (stack);
+		StackReSize (stack);
 
-	* (stack->data + stack->size) = addDataElement;
+	* ((Elem_t * )((uint8_t * )stack->data + sizeof (long long) + stack->size * sizeof (Elem_t))) = addDataElement;
 	stack->size++;
+	StackDump (stack, __LINE__, __PRETTY_FUNCTION__, __FILE__);
+}
 
+
+unsigned int fullCodeError (Stack * stack) {
+
+	if (stack == NULL)
+		stack->code_of_error = (stack->code_of_error) | STACK_NULL;
+
+	if (stack->data == NULL)
+		stack->code_of_error = (stack->code_of_error) | BAD_DATA;
+
+	if (stack->size < 0)
+		stack->code_of_error = (stack->code_of_error) | BAD_SIZE;
+
+	if (stack->capacity < 0)
+		stack->code_of_error = (stack->code_of_error) | BAD_CAPACITY;
+
+	if (stack->capacity < stack->size)
+		stack->code_of_error = (stack->code_of_error) | OVERFLOW;
+
+	if (stack->startStructCanary != CANARY)
+		stack->code_of_error = (stack->code_of_error) | BAD_START_ELEM_T_CANARY;
+
+	if (stack->finishStructCanary != CANARY)
+		stack->code_of_error = (stack->code_of_error) | BAD_FINISH_ELEM_T_CANARY;
+
+	if ( * ((long long * ) stack->data) != CANARY)
+		stack->code_of_error = (stack->code_of_error) | BAD_START_ELEM_T_CANARY;
+
+	if ( * ((long long * )((uint8_t * )stack->data + sizeof (long long) + sizeof (Elem_t) * stack->capacity)) != CANARY)
+		stack->code_of_error = (stack->code_of_error) | BAD_START_ELEM_T_CANARY;
+
+	return stack->code_of_error;
 }
 
 
 void StackError (Stack * stack) {
 
-	if (stack == NULL)
-		stack->code_of_error = STACK_NULL;
-
-	if (stack->data == NULL)
-		stack->code_of_error = BAD_DATA;
-
-	if (stack->size < 0)
-		stack->code_of_error = BAD_SIZE;
-
-	if (stack->capacity < 0)
-		stack->code_of_error = BAD_CAPACITY;
-
-	if (stack->capacity > stack->size)
-		stack->code_of_error = OVERFLOW;
-
-	if (stack->startStructCanary != CANARY)
-		stack->code_of_error = BAD_START_ELEM_T_CANARY;
-
-	if (stack->finishStructCanary != CANARY)
-		stack->code_of_error = BAD_FINISH_ELEM_T_CANARY;
-
-	if ( * ((long long * ) stack->data) != CANARY)
-		stack->code_of_error = BAD_START_ELEM_T_CANARY;
-
-	if ( * ((long long * )(stack->data + stack->capacity) + 1) != CANARY)
-		stack->code_of_error = BAD_START_ELEM_T_CANARY;
-
-	//if (stack->code_of_error != 0)
-		//StackDumpErrors (stack);
+	if (fullCodeError (stack))
+		StackDump (stack, __LINE__, __PRETTY_FUNCTION__, __FILE__);	
 }
 
 
-void StackDumpErrors (Stack * stack) {
+void StackDump (Stack * stack, int lineStackDump, const char * nameFunctionDump, const char * fileFunctionDump) {
 
+	FILE * dump = fopen ("dumpfile.txt", "w");
 
+	fprintf (dump, "Stack [%p] (%s)\nStack called line %d in function %s at %s.\n"
+				"\n", stack, STATUS (stack->code_of_error),lineStackDump, nameFunctionDump, fileFunctionDump);
+	fprintf (dump, "CODE OF ERRORS: %d. ERRORS:\n", stack->code_of_error);
+	if (stack->code_of_error) errorsDecoder (stack, dump);
+	
+	stackInfoDump (stack, dump);
+	fclose (dump);
 } 
+
+
+void errorsDecoder (Stack * stack, FILE * dump) {
+
+		if (stack->code_of_error & BAD_DATA)
+			fprintf (dump, "Problem with memory for Elem_t * data.\n");
+		
+		if (stack->code_of_error & BAD_CAPACITY)
+			fprintf (dump, "CAPACITY < 0.\n");
+
+		if (stack->code_of_error & BAD_SIZE)
+			fprintf (dump, "SIZE < 0.\n");
+
+		if (stack->code_of_error & OVERFLOW)
+			fprintf (dump, "CAPACITY < SIZE\n");
+
+		if (stack->code_of_error & BAD_START_ELEM_T_CANARY)
+			fprintf (dump, "Incorrect start canary of the Elem_t *.\n");
+
+		if (stack->code_of_error & BAD_FINISH_ELEM_T_CANARY)
+			fprintf (dump, "Incorrect finish canary of the Elem_t *.\n");
+
+		if (stack->code_of_error & BAD_START_STRUCT_CANARY)
+			fprintf (dump, "Incorrect start canary of the stack.\n");
+
+		if (stack->code_of_error & BAD_FINISH_STRUCT_CANARY)
+			fprintf (dump, "Incorrect final canary of the stack.\n");
+
+		if (stack->code_of_error & STACK_NULL)
+			fprintf (dump, "Bad pointer on the stack.\n");
+}
+
+
+void stackInfoDump (Stack * stack, FILE * dump) {
+
+	fprintf (dump, "\nINFO:                     \n"                                     );
+	fprintf (dump, "START STRUCT CANARY:    %llx\n",       stack->startStructCanary     );
+	fprintf (dump, "FINISH STRUCT CANARY:   %llx\n",       stack->finishStructCanary    );
+	fprintf (dump, "START ELEM_T * CANARY:  %llx\n",       * (long long * )(stack->data));
+	fprintf (dump, "FINISH ELEM_T * CANARY: %llx\n",       * ((long long * )((uint8_t * )\
+		      stack->data + sizeof (long long) + sizeof (Elem_t) * stack->capacity))     );
+	fprintf (dump, "STACK SIZE:               %d\n",       stack->size                  );
+	fprintf (dump, "STACK CAPACITY:           %d\n",       stack->capacity              );
+
+	int i = 0;
+	for (i = 0; i < stack->capacity; i++) {
+
+				fprintf (dump, "*[%d] = %lf\n", i, * ((Elem_t * )((uint8_t * )stack->data +
+				sizeof (long long) + i * sizeof (Elem_t))));
+	}
+
+
+}
+
 
 void StackReSize (Stack * stack) {
 
-	StackError (stack);
-	* ((Elem_t * )(stack->data + stack->capacity)) = POISON;
-	stack->data = (Elem_t * ) realloc (stack->data, sizeof (Elem_t) * (RATIO_SIZE_STACK * stack->capacity + 2));
+	* ((Elem_t * )((uint8_t * )stack->data + sizeof (long long) + sizeof (Elem_t) * stack->capacity)) = 0;
+	stack->data = (Elem_t * ) realloc (stack->data, sizeof (Elem_t) * RATIO_SIZE_STACK * stack->capacity + 2 * sizeof (long long));
 	stack->capacity =  RATIO_SIZE_STACK * stack->capacity;
-	* ((long long * )(stack->data + stack->capacity) + 1) = CANARY;
-	StackError (stack);
+	* ((long long * )((uint8_t * )stack->data + sizeof (long long) + sizeof (Elem_t) * stack->capacity)) = CANARY;
 }
 
 
-void IncreaseMemory () {
+void UninititalizeElements (Stack * stack) {
 
-
-
+	int i = 0;
+	for (i = stack->size; i < stack->capacity; i++)
+		* (Elem_t * ) ((uint8_t * )stack->data + sizeof (long long) + sizeof (Elem_t) * i) = POISON;
 }
