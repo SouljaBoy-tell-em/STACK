@@ -1,0 +1,37 @@
+Stack [0x16bc23910] (ok)
+Stack called line 111 in function void StackPush(Stack *, Elem_t) at main_stack.cpp.
+
+CODE OF ERRORS: 0. ERRORS:
+
+INFO:                     
+START STRUCT CANARY:    dedded32
+FINISH STRUCT CANARY:   dedded32
+START ELEM_T * CANARY:  dedded32
+FINISH ELEM_T * CANARY: dedded32
+STACK SIZE:               20
+STACK CAPACITY:           25
+*[0] = 1.000000
+*[1] = 2.000000
+*[2] = 3.000000
+*[3] = 4.000000
+*[4] = 5.000000
+*[5] = 6.000000
+*[6] = 7.000000
+*[7] = 8.000000
+*[8] = 9.000000
+*[9] = 10.000000
+*[10] = 11.000000
+*[11] = 12.000000
+*[12] = 13.000000
+*[13] = 14.000000
+*[14] = 15.000000
+*[15] = 16.000000
+*[16] = 17.000000
+*[17] = 18.000000
+*[18] = 19.000000
+*[19] = 20.000000
+*[20] = -228.228000
+*[21] = -228.228000
+*[22] = -228.228000
+*[23] = -228.228000
+*[24] = -228.228000
