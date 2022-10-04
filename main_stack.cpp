@@ -56,19 +56,17 @@ void StackReSize (Stack * stack);
 void UninititalizeElements (Stack * stack);
 void StackPop (Stack * stack);
 void StackClear (Stack * stack);
-Elem_t * getStartData (Stack * stack);
+uint8_t * getStartData (Stack * stack);
 
 
 int main (void) {
 
 	Stack stack = {};
-
 	dumpFileCleaning ();
 	StackCtor (&stack, 25);
 
-	for (int i = 0; i < 20; i++)
+	for (int i = 0; i < 30; i++)
 		StackPush (&stack, (double) (i + 1));
-	StackClear (&stack);
 
 	return 0;
 }
@@ -85,20 +83,20 @@ void StackCtor (Stack * stack, int capacity) {
 
 	stack->code_of_error = NO_ERROR;
 	if (stack == NULL)
-		stack->code_of_error = STACK_NULL;
+		stack->code_of_error = stack->code_of_error | STACK_NULL;
 
 	if ((stack->data = (Elem_t * ) malloc (capacity * sizeof (Elem_t) + 2 * sizeof (long long))) == NULL)
-		stack->code_of_error = BAD_DATA;
+		stack->code_of_error = stack->code_of_error | BAD_DATA;
 
 	stack->capacity = capacity;
 	if (stack->capacity < 0)
-		stack->code_of_error = BAD_CAPACITY;
+		stack->code_of_error = stack->code_of_error | BAD_CAPACITY;
 
 	stack->size                                                                                            =      0;
 	stack->startStructCanary                                                                               = CANARY;
 	stack->finishStructCanary                                                                              = CANARY;
 	* ((long long * ) stack->data)                                                                         = CANARY;
-	* ((long long * )((uint8_t * )stack->data + sizeof (long long) + sizeof (Elem_t) * stack->capacity))   = CANARY;
+	* ((long long * )(getStartData (stack) + sizeof (Elem_t) * stack->capacity))   = CANARY;
 	UninititalizeElements (stack);
 	StackDump (stack, __LINE__, __PRETTY_FUNCTION__, __FILE__);
 }
@@ -110,7 +108,7 @@ void StackPush (Stack * stack, Elem_t addDataElement) {
 	if (stack->size > stack->capacity)
 		StackReSize (stack);
 
-	* ((Elem_t * )((uint8_t * )stack->data + sizeof (long long) + stack->size * sizeof (Elem_t))) = addDataElement;
+	* ((Elem_t * )(getStartData (stack) + stack->size * sizeof (Elem_t))) = addDataElement;
 	stack->size++;
 	StackError (stack);
 	StackDump (stack, __LINE__, __PRETTY_FUNCTION__, __FILE__);
@@ -227,10 +225,12 @@ void stackInfoDump (Stack * stack, FILE * dump) {
 void StackReSize (Stack * stack) {
 
 	StackError (stack);
-	* ((Elem_t * )((uint8_t * )stack->data + sizeof (long long) + sizeof (Elem_t) * stack->capacity)) = 0;
+	uint8_t * dataPointer = getStartData (stack);
+	* ((Elem_t * )(dataPointer + sizeof (Elem_t) * stack->capacity)) = POISON;
 	stack->data = (Elem_t * ) realloc (stack->data, sizeof (Elem_t) * RATIO_SIZE_STACK * stack->capacity + 2 * sizeof (long long));
 	stack->capacity =  RATIO_SIZE_STACK * stack->capacity;
-	* ((long long * )((uint8_t * )stack->data + sizeof (long long) + sizeof (Elem_t) * stack->capacity)) = CANARY;
+	* ((long long * )(dataPointer + sizeof (Elem_t) * stack->capacity)) = CANARY;
+	UninititalizeElements (stack);
 	StackError (stack);
 }
 
@@ -240,7 +240,7 @@ void UninititalizeElements (Stack * stack) {
 	StackError (stack);
 	int i = 0;
 	for (i = stack->size; i < stack->capacity; i++)
-		* (Elem_t * ) ((uint8_t * )stack->data + sizeof (long long) + sizeof (Elem_t) * i) = POISON;
+		* (Elem_t * ) (getStartData (stack) + sizeof (long long) + sizeof (Elem_t) * i) = POISON;
 	StackError (stack);
 }
 
@@ -248,7 +248,7 @@ void UninititalizeElements (Stack * stack) {
 void StackPop (Stack * stack) {
 
 	StackError (stack);
-	* ((Elem_t * )((uint8_t * )stack->data + sizeof (long long) + (stack->size - 1) * sizeof (Elem_t))) = POISON;
+	* ((Elem_t * )(getStartData (stack) + (stack->size - 1) * sizeof (Elem_t))) = POISON;
 	stack->size--;
 	StackError (stack);
 	StackDump (stack, __LINE__, __PRETTY_FUNCTION__, __FILE__);
@@ -260,7 +260,7 @@ void StackClear (Stack * stack) {
 	StackError (stack);
 	int i = 0;
 	for (i = 0; i < stack->capacity; i++)
-		* (Elem_t * ) ((uint8_t * )stack->data + sizeof (long long) + sizeof (Elem_t) * i) = POISON;
+		* (Elem_t * ) (getStartData (stack) + sizeof (Elem_t) * i) = POISON;
 	stack->size = 0;
 	StackError (stack);
 	StackDump (stack, __LINE__, __PRETTY_FUNCTION__, __FILE__);
@@ -268,7 +268,7 @@ void StackClear (Stack * stack) {
 
 
 
-Elem_t * getStartData (Stack * stack) {
+uint8_t * getStartData (Stack * stack) {
 
-	return (Elem_t * )((uint8_t * )stack->data + sizeof (long long));
+	return (uint8_t * )stack->data + sizeof (long long);
 }
