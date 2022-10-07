@@ -29,6 +29,8 @@ typedef struct {
 	int size;
 	int capacity;
 	unsigned int code_of_error;
+	long long hash_stack;
+	Elem_t hash_data;
 	long long finishStructCanary;
 } Stack;	 
 
@@ -56,11 +58,12 @@ void StackError (Stack * stack);
 void StackDump (Stack * stack, int lineStackDump, const char * nameFunctionDump, const char * fileFunctionDump);
 void errorsDecoder (Stack * stack, FILE * dump);
 void stackInfoDump (Stack * stack, FILE * dump);
-void StackReSize (Stack * stack, Elem_t addDataElement);
+void StackReSizeUp	 (Stack * stack, Elem_t addDataElement);
 void UninititalizeElements (Stack * stack);
 void StackPop (Stack * stack);
 void StackClear (Stack * stack);
 uint8_t * getStartData (Stack * stack);
+void hashFunction (Stack * stack);
 
 
 int main (void) {
@@ -68,14 +71,16 @@ int main (void) {
 	Stack stack = {};
 	strcpy (stack.name, STACKNAME (stack));
 	dumpFileCleaning ();
-	StackCtor (&stack, 25);
-	/*
-	for (int i = 0; i < 30; i++)
+	StackCtor (&stack, 40);
+	
+
+	for (int i = 0; i < 35; i++)
 		StackPush (&stack, (double) (i + 1));
 
-	for (int i = 0; i < 10; i++)
+	for (int i = 0; i < 30; i++)
 		StackPop (&stack);
-*/
+
+	hashFunction (&stack);
 	return 0;
 }
 
@@ -105,9 +110,8 @@ void StackCtor (Stack * stack, int capacity) {
 	stack->startStructCanary                                                                               = CANARY;
 	stack->finishStructCanary                                                                              = CANARY;
 	* ((long long * ) stack->data)                                                                         = CANARY;
-	* ((long long * )(getStartData (stack) + sizeof (Elem_t) * stack->capacity))   = CANARY;
+	* ((long long * )(getStartData (stack) + sizeof (Elem_t) * stack->capacity))                           = CANARY;
 	UninititalizeElements (stack);
-	StackDump (stack, __LINE__, __PRETTY_FUNCTION__, __FILE__);
 }
 
 
@@ -115,12 +119,11 @@ void StackPush (Stack * stack, Elem_t addDataElement) {
 
 	StackError (stack);
 	if (stack->size > stack->capacity)
-		StackReSize (stack, addDataElement);
+		StackReSizeUp (stack, addDataElement);
 
 	* ((Elem_t * )(getStartData (stack) + stack->size * sizeof (Elem_t))) = addDataElement;
 	stack->size++;
 	StackError (stack);
-	StackDump (stack, __LINE__, __PRETTY_FUNCTION__, __FILE__);
 }
 
 
@@ -159,20 +162,21 @@ unsigned int fullCodeError (Stack * stack) {
 
 void StackError (Stack * stack) {
 
-	if (fullCodeError (stack))
-		StackDump (stack, __LINE__, __PRETTY_FUNCTION__, __FILE__);	
+		fullCodeError (stack);
+		StackDump (stack, __LINE__, __PRETTY_FUNCTION__, __FILE__);
 }
 
 
 void StackDump (Stack * stack, int lineStackDump, const char * nameFunctionDump, const char * fileFunctionDump) {
 
 	FILE * dump = fopen ("dumpfile.txt", "w");
-
+	if (dump == NULL) exit (EXIT_FAILURE);
 	fprintf (dump, "Stack [%p] (%s)\nStack called line %d in function %s at %s.\n"
 				"\n", stack, STATUS (stack->code_of_error),lineStackDump, nameFunctionDump, fileFunctionDump);
 	fprintf (dump, "CODE OF ERRORS: %d. ERRORS:\n", stack->code_of_error);
+
+	hashFunction (stack);
 	if (stack->code_of_error) errorsDecoder (stack, dump);
-	
 	stackInfoDump (stack, dump);
 	fclose (dump);
 } 
@@ -213,6 +217,8 @@ void stackInfoDump (Stack * stack, FILE * dump) {
 
 	fprintf (dump, "\nINFO:                     \n"                                     );
 	fprintf (dump, "STACK NAME:             %s  \n",       stack->name                  );
+	fprintf (dump, "STACK_HASH:             %lld\n",       stack->hash_stack            );
+	//fprintf (dump, "DATA_HASH:              %lf \n",       stack->hash_data             );
 	fprintf (dump, "START STRUCT CANARY:    %llx\n",       stack->startStructCanary     );
 	fprintf (dump, "FINISH STRUCT CANARY:   %llx\n",       stack->finishStructCanary    );
 	fprintf (dump, "START ELEM_T * CANARY:  %llx\n",       * (long long * )(stack->data));
@@ -229,7 +235,7 @@ void stackInfoDump (Stack * stack, FILE * dump) {
 }
 
 
-void StackReSize (Stack * stack, Elem_t addDataElement) {
+void StackReSizeUp (Stack * stack, Elem_t addDataElement) {
 
 	StackError (stack);
 	uint8_t * dataPointer = getStartData (stack);
@@ -238,6 +244,16 @@ void StackReSize (Stack * stack, Elem_t addDataElement) {
 	stack->capacity =  RATIO_SIZE_STACK * stack->capacity;
 	* ((long long * )(dataPointer + sizeof (Elem_t) * stack->capacity)) = CANARY;
 	UninititalizeElements (stack);
+	StackError (stack);
+}
+
+
+void StackReSizeDown (Stack * stack) {
+
+	StackError (stack);
+	UninititalizeElements (stack);
+	* (Elem_t * )(getStartData (stack) + (stack->size - 1) * sizeof (Elem_t)) = CANARY;
+	stack->capacity /= 2;
 	StackError (stack);
 }
 
@@ -255,10 +271,13 @@ void UninititalizeElements (Stack * stack) {
 void StackPop (Stack * stack) {
 
 	StackError (stack);
+
+	if (stack->capacity > 2 * stack->size)
+		StackReSizeDown (stack);
+
 	* ((Elem_t * )(getStartData (stack) + (stack->size - 1) * sizeof (Elem_t))) = POISON;
 	stack->size--;
 	StackError (stack);
-	StackDump (stack, __LINE__, __PRETTY_FUNCTION__, __FILE__);
 }
 
 
@@ -270,12 +289,27 @@ void StackClear (Stack * stack) {
 		* (Elem_t * ) (getStartData (stack) + sizeof (Elem_t) * i) = POISON;
 	stack->size = 0;
 	StackError (stack);
-	StackDump (stack, __LINE__, __PRETTY_FUNCTION__, __FILE__);
 }
-
 
 
 uint8_t * getStartData (Stack * stack) {
 
 	return (uint8_t * )stack->data + sizeof (long long);
+}
+
+
+void hashFunction (Stack * stack) {
+
+	long long hashStack = 0;
+	Elem_t hashData = 0;
+	int i = 0;
+	
+	for (i = 0; i < sizeof ( * stack); i++)
+		hashStack += ((( * (uint8_t * )stack) + i) + 228) * (228 * sizeof ( * stack) * i);
+
+	//for (i = 0; i < stack->capacity; i++)
+		//hashData += (int)( * ((Elem_t * )(getStartData (stack) + sizeof (Elem_t) * i)) + 228) * (228 * sizeof (stack->data) * i);
+
+	stack->hash_stack = hashStack;
+	//stack->hash_data = hashData;
 }
