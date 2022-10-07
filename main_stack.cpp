@@ -1,12 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stdint.h>
 
 
+#define MAXLEN 512
 #define CANARY 0xDEDDED32
 #define RATIO_SIZE_STACK 2
 #define DETERMINERROR 000000001
 #define POISON -228.228
+#define STACKNAME(var)(#var)
 #define STATUS(codeError) (codeError) ? "error": "ok"
 #define CHECK_ERROR(condition, message_error) 				 \
             do {                                          \
@@ -21,6 +24,7 @@ typedef double Elem_t;
 typedef struct {
 
 	long long startStructCanary;
+	char name [MAXLEN];
 	Elem_t * data;
 	int size;
 	int capacity;
@@ -52,7 +56,7 @@ void StackError (Stack * stack);
 void StackDump (Stack * stack, int lineStackDump, const char * nameFunctionDump, const char * fileFunctionDump);
 void errorsDecoder (Stack * stack, FILE * dump);
 void stackInfoDump (Stack * stack, FILE * dump);
-void StackReSize (Stack * stack);
+void StackReSize (Stack * stack, Elem_t addDataElement);
 void UninititalizeElements (Stack * stack);
 void StackPop (Stack * stack);
 void StackClear (Stack * stack);
@@ -62,12 +66,16 @@ uint8_t * getStartData (Stack * stack);
 int main (void) {
 
 	Stack stack = {};
+	strcpy (stack.name, STACKNAME (stack));
 	dumpFileCleaning ();
 	StackCtor (&stack, 25);
-
+	/*
 	for (int i = 0; i < 30; i++)
 		StackPush (&stack, (double) (i + 1));
 
+	for (int i = 0; i < 10; i++)
+		StackPop (&stack);
+*/
 	return 0;
 }
 
@@ -82,6 +90,7 @@ void dumpFileCleaning (void) {
 void StackCtor (Stack * stack, int capacity) {
 
 	stack->code_of_error = NO_ERROR;
+
 	if (stack == NULL)
 		stack->code_of_error = stack->code_of_error | STACK_NULL;
 
@@ -106,7 +115,7 @@ void StackPush (Stack * stack, Elem_t addDataElement) {
 
 	StackError (stack);
 	if (stack->size > stack->capacity)
-		StackReSize (stack);
+		StackReSize (stack, addDataElement);
 
 	* ((Elem_t * )(getStartData (stack) + stack->size * sizeof (Elem_t))) = addDataElement;
 	stack->size++;
@@ -141,8 +150,8 @@ unsigned int fullCodeError (Stack * stack) {
 	if ( * ((long long * ) stack->data) != CANARY)
 		stack->code_of_error = (stack->code_of_error) | BAD_START_ELEM_T_CANARY;
 
-	if ( * ((long long * )((uint8_t * )stack->data + sizeof (long long) + sizeof (Elem_t) * stack->capacity)) != CANARY)
-		stack->code_of_error = (stack->code_of_error) | BAD_START_ELEM_T_CANARY;
+	if ( * ((long long * )(getStartData (stack) + sizeof (Elem_t) * stack->capacity)) != CANARY)
+		stack->code_of_error = (stack->code_of_error) | BAD_FINISH_ELEM_T_CANARY;
 
 	return stack->code_of_error;
 }
@@ -187,7 +196,7 @@ void errorsDecoder (Stack * stack, FILE * dump) {
 			fprintf (dump, "Incorrect start canary of the Elem_t *.\n");
 
 		if (stack->code_of_error & BAD_FINISH_ELEM_T_CANARY)
-			fprintf (dump, "Incorrect finish canary of the Elem_t *.\n");
+			fprintf (dump, "Incorrect final canary of the Elem_t *.\n");
 
 		if (stack->code_of_error & BAD_START_STRUCT_CANARY)
 			fprintf (dump, "Incorrect start canary of the stack.\n");
@@ -203,6 +212,7 @@ void errorsDecoder (Stack * stack, FILE * dump) {
 void stackInfoDump (Stack * stack, FILE * dump) {
 
 	fprintf (dump, "\nINFO:                     \n"                                     );
+	fprintf (dump, "STACK NAME:             %s  \n",       stack->name                  );
 	fprintf (dump, "START STRUCT CANARY:    %llx\n",       stack->startStructCanary     );
 	fprintf (dump, "FINISH STRUCT CANARY:   %llx\n",       stack->finishStructCanary    );
 	fprintf (dump, "START ELEM_T * CANARY:  %llx\n",       * (long long * )(stack->data));
@@ -212,21 +222,18 @@ void stackInfoDump (Stack * stack, FILE * dump) {
 	fprintf (dump, "STACK CAPACITY:           %d\n",       stack->capacity              );
 
 	int i = 0;
-	for (i = 0; i < stack->capacity; i++) {
-
-				fprintf (dump, "*[%d] = %lf\n", i, * ((Elem_t * )((uint8_t * )stack->data +
-				sizeof (long long) + i * sizeof (Elem_t))));
-	}
+	for (i = 0; i < stack->capacity; i++)
+		fprintf (dump, "*[%d] = %lf\n", i, * ((Elem_t * )(getStartData (stack) + i * sizeof (Elem_t))));
 
 
 }
 
 
-void StackReSize (Stack * stack) {
+void StackReSize (Stack * stack, Elem_t addDataElement) {
 
 	StackError (stack);
 	uint8_t * dataPointer = getStartData (stack);
-	* ((Elem_t * )(dataPointer + sizeof (Elem_t) * stack->capacity)) = POISON;
+	* ((Elem_t * )(dataPointer + sizeof (Elem_t) * stack->capacity)) = addDataElement;
 	stack->data = (Elem_t * ) realloc (stack->data, sizeof (Elem_t) * RATIO_SIZE_STACK * stack->capacity + 2 * sizeof (long long));
 	stack->capacity =  RATIO_SIZE_STACK * stack->capacity;
 	* ((long long * )(dataPointer + sizeof (Elem_t) * stack->capacity)) = CANARY;
@@ -240,7 +247,7 @@ void UninititalizeElements (Stack * stack) {
 	StackError (stack);
 	int i = 0;
 	for (i = stack->size; i < stack->capacity; i++)
-		* (Elem_t * ) (getStartData (stack) + sizeof (long long) + sizeof (Elem_t) * i) = POISON;
+		* (Elem_t * ) (getStartData (stack) + sizeof (Elem_t) * i) = POISON;
 	StackError (stack);
 }
 
