@@ -9,8 +9,6 @@
 int main (void) {
 
 	Stack stack = {};
-	STACKNAME (stack.name, stack);
-	//strcpy (stack.name, STACKNAME (stack));
 	dumpFileCleaning ();
 	StackCtor (&stack, 25);
 	
