@@ -2,6 +2,10 @@
 ///\/brief This file is header. This file contains program libraries, constants, enum cases and INFO about functions."
 
 
+#ifndef _FUNC_H__
+#define _FUNC_H__
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -138,3 +142,6 @@ void StackReSizeUp (Stack * stack, Elem_t addDataElement);
 //! This function pours the stack elements by POISON;
 //! @param [in] stack - pointer of the stack.
 void UninititalizeElements (Stack * stack);
+
+
+#endif
