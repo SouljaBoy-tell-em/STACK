@@ -8,4 +8,4 @@ The CANARY is flags of the data or flags of the stack. Data and the stack contai
 
 3. STACKDUMP-FILE is file, that records information about the stack. If stack don't violated, status of the stack is OK, ELSE - error. In the dumpfile.txt (STACK: ERROR || OK) you can see result of the stack-work.
 
-4. As a supplement: The HASH function can calculate the hash of the stack.
+4. As a supplement: The HASH function can calculate the hash of the stack. 
